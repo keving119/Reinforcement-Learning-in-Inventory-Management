@@ -93,14 +93,6 @@ def discount_cumsum(x, discount_factor, horizon):
     #OLD:
     return scipy.signal.lfilter([1], [1, float(-discount_factor)], x[::-1], axis=0)[::-1]
 
-    #NEW:
-    # for i in range(round(len(x)/2)):
-    #     if i == 0 :
-    #         array = x[horizon+i::-1]
-    #     else:
-    #         array = x[horizon+i:i-1:-1]
-    #     x[i] = scipy.signal.lfilter([1], [1, float(-discount_factor)], array, axis=0)[::-1][0]
-    # return x
 
 
 def scale_input(env, state):

@@ -8,7 +8,8 @@ import scipy.stats as st
 
 case               = General()
 case.order_policy  = 'BaseStock'                           # Predetermined order policy, can be either 'X','X+Y' or 'BaseStock'
-original_action             = [[37, 47, 33, 63, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]]
+original_action             = [[0, 0, 0, 185, 0, 0, 40, 0, 0, 40, 0, 0, 40, 0, 0, 40, 0, 40]]
+# original_action             = [[37, 47, 33, 63, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]]
 # original_action             = [[82, 100, 64, 83, 35, 35, 35, 35, 35]]
 action = (case.action_high - case.action_low) * ((original_action - case.action_min) / (case.action_max - case.action_min)) + case.action_low
 replications       = 250
@@ -37,11 +38,13 @@ for i in range(len(action)):
                 totalreward += reward
         totalrewardlist.append(totalreward)
         totaltotalreward += totalreward
+        print(f"bo:{totalbackordercosts}")
+        print(totalholdingcosts)
         totalfulfilled += env.TotalFulfilled
         totaldemand += env.TotalDemand
         # totalbo += env.TotalBO
     fillrate = totalfulfilled/totaldemand
     print(fillrate)
-    print(totalrewardlist)
+    # print(totalrewardlist)
     print(st.t.interval(0.95, len(totalrewardlist)-1, loc=np.mean(totalrewardlist), scale=st.sem(totalrewardlist)))
     print("Average total reward: {}, Action: {}".format(totaltotalreward/replications, action[i]))

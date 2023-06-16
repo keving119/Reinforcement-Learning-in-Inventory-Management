@@ -48,10 +48,8 @@ class MLPDiscreteActor(Actor):
         This network is called 'pi_net'
         '''
         super().__init__()
-        # self.pi_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
         self.pi_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation, output_activation = nn.Softmax)
 
-    
     def _distribution(self, obs):
         '''
         Since it is a discrete distribution, we create a categorical distribution, parameterized by probabilities

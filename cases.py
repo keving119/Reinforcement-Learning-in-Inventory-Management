@@ -1,28 +1,52 @@
 import numpy as np
 
+
 class BeerGame:
-    """Based on the beer game by Chaharsooghi (2008)."""
+    """
+    A supply chain simulation game based on the beer game by Chaharsooghi (2008).
+
+    Attributes:
+    - stockpoints_echelon: list of integers representing the number of nodes per echelon, including suppliers and customers
+    - no_suppliers: integer representing the number of suppliers
+    - no_customers: integer representing the number of customers
+    - no_stockpoints: integer representing the number of stockpoints
+    - no_nodes: integer representing the total number of nodes
+    - no_echelons: integer representing the total number of echelons, including supplier and customer
+    - connections: numpy array representing the connections between every stockpoint
+    - unsatisfied_demand: string representing what happens with unsatisfied demand, can be either 'backorders' or 'lost_sales'
+    - initial_inventory: numpy array representing the initial inventory per stockpoint
+    - holding_costs: numpy array representing the holding costs per stockpoint
+    - bo_costs: numpy array representing the backorder costs per stockpoint
+    - demand_dist: string representing the demand distribution, can be either 'poisson' or 'uniform'
+    - demand_lb: integer representing the lower bound of the demand distribution
+    - demand_ub: integer representing the upper bound of the demand distribution
+    - leadtime_dist: string representing the leadtime distribution, can only be 'uniform'
+    - leadtime_lb: integer representing the lower bound of the leadtime distribution
+    - leadtime_ub: integer representing the upper bound of the leadtime distribution
+    - order_policy: string representing the predetermined order policy, can be either 'X' or 'X+Y' or 'BaseStock'
+    - horizon: integer representing the simulation horizon
+    - divide: integer representing the number of time steps per day
+    - warmup: integer representing the number of warm-up days
+    - fix: boolean representing whether the initial inventory is fixed
+    - action_low: numpy array representing the lower bound of the actions
+    - action_high: numpy array representing the upper bound of the actions
+    - state_scale_low: integer representing the lower bound of the state scaling factor
+    - state_scale_high: integer representing the upper bound of the state scaling factor
+    - action_min: numpy array representing the minimum action values
+    - action_max: numpy array representing the maximum action values
+    - state_low: numpy array representing the lower bound of the state variables
+    - state_high: numpy array representing the upper bound of the state variables
+    """
 
     def __init__(self):
-        # Supply chain variables
-        # Number of nodes per echelon, including suppliers and customers
         # The first element is the number of suppliers
         # The last element is the number of customers
         self.stockpoints_echelon   = [1, 1, 1, 1, 1, 1]
-        # Number of suppliers
         self.no_suppliers          = self.stockpoints_echelon[0]
-        # Number of customers
         self.no_customers          = self.stockpoints_echelon[-1]
-        # Number of stockpoints
-        self.no_stockpoints = sum(self.stockpoints_echelon) - \
-            self.no_suppliers - self.no_customers
-
-        # Total number of nodes
-        self.no_nodes              = sum(self.stockpoints_echelon)
-        # Total number of echelons, including supplier and customer
+        self.no_stockpoints        = np.sum(self.stockpoints_echelon) - self.no_suppliers - self.no_customers
+        self.no_nodes              = np.sum(self.stockpoints_echelon)
         self.no_echelons           = len(self.stockpoints_echelon)
-        
-        # Connections between every stockpoint
         self.connections           = np.array([
                                       [0, 1, 0, 0, 0, 0],
                                       [0, 0, 1, 0, 0, 0],
@@ -31,25 +55,17 @@ class BeerGame:
                                       [0, 0, 0, 0, 0, 1],
                                       [0, 0, 0, 0, 0, 0]
                                       ])
-        # Determines what happens with unsatisfied demand, can be either 'backorders' or 'lost_sales'
         self.unsatisfied_demand    = 'backorders'                                             
-        # Initial inventory per stockpoint
         self.initial_inventory     = [100000, 12, 12, 12, 12, 0] 
-        # Holding costs per stockpoint
         self.holding_costs         = [0, 1, 1, 1, 1, 0]                
-        # Backorder costs per stockpoint
         self.bo_costs              = [2, 2, 2, 2, 2, 2]                
         # Demand distribution, can be either 'poisson' or 'uniform'
         self.demand_dist           = 'uniform'
-        # Lower bound of the demand distribution
         self.demand_lb             = 0
-        # Upper bound of the demand distribution
         self.demand_ub             = 15
         # Leadtime distribution, can only be 'uniform'
         self.leadtime_dist         = 'uniform'
-        # Lower bound of the leadtime distribution
         self.leadtime_lb           = 0
-        # Upper bound of the leadtime distribution
         self.leadtime_ub           = 4                                 
         # Predetermined order policy, can be either 'X' or 'X+Y' or 'BaseStock' 
         self.order_policy          = 'X'
@@ -82,26 +98,16 @@ class Divergent:
     """ Based on the paper of Kunnumkal and Topaloglu (2011)"""
 
     def __init__(self):
-        # Supply chain variables
-        # Number of nodes per echelon, including suppliers and customers
         # The first element is the number of suppliers
         # The last element is the number of customers
         self.stockpoints_echelon             = [1, 1, 3, 3]
-        # Number of suppliers
         self.no_suppliers = self.stockpoints_echelon[0]
-        # Number of customers
         self.no_customers = self.stockpoints_echelon[-1]
-        # Number of stockpoints
         self.no_stockpoints = sum(self.stockpoints_echelon) - \
             self.no_suppliers - self.no_customers
-
-        # Total number of nodes
         self.no_nodes = sum(self.stockpoints_echelon)
-        # Total number of echelons, including supplier and customer
         self.no_echelons = len(self.stockpoints_echelon)
-        
-        # Connections between every stockpoint
-        self.connections                = np.array([                        # Connections between every stockpoint
+        self.connections                = np.array([
                                             [0, 1, 0, 0, 0, 0, 0, 0],
                                             [0, 0, 1, 1, 1, 0, 0, 0],
                                             [0, 0, 0, 0, 0, 1, 0, 0],
@@ -113,17 +119,12 @@ class Divergent:
                                             ])
         # Determines what happens with unsatisfied demand, can be either 'backorders' or 'lost_sales'
         self.unsatisfied_demand              = 'backorders'
-        # Initial inventory per stockpoint
         self.initial_inventory               = [1000000, 0, 0, 0, 0, 0, 0, 0]   
-        # Holding costs per stockpoint 
         self.holding_costs                   = [0, 0.6, 1, 1, 1, 0, 0, 0]      
-        # Backorder costs per stockpoint  
         self.bo_costs                        = [0, 0, 19, 19, 19, 0, 0, 0]      
         # Demand distribution, can be either 'poisson' or 'uniform' 
         self.demand_dist                     = 'poisson'                       
-        # Lower bound of the demand distribution  
         self.demand_lb                       = 5                                 
-        # Upper bound of the demand distribution
         self.demand_ub                       = 15                                
         # Leadtime distribution, can only be 'uniform'
         self.leadtime_dist                   = 'uniform'                         
@@ -253,6 +254,13 @@ class General:
         self.state_scale_low                 = 0
         self.state_scale_high                = 1
         self.state_low                       = np.zeros(48)
+
+        self.state_inventory                = 500
+        self.state_backorders_warehouses    = 500
+        self.state_backorders_retailers     = 250
+        self.state_in_transit               = 150
+
+
         self.state_high                      = np.array([4500, 8250,                                  # Total inventory and backorders
                                                         500, 500, 500, 500, 500, 500, 500, 500, 500,  # Inventory per stockpoint
                                                         500, 500, 500,                                # Backorders for stockpoint 4

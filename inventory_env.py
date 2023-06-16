@@ -4,8 +4,17 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import gym
-from gym import spaces
+from gym.spaces import Box, Dict
 
+
+# Function to convert named state space to a flattened input array
+def named_state_space_to_input(named_state_space):
+    print(named_state_space)
+    input_array = np.array([], dtype=int)
+    for key in named_state_space:
+        input_array = np.concatenate((input_array, np.array(named_state_space[key]).flatten()))
+    print(input_array.shape)
+    return input_array
 
 def generate_leadtime(t, dist, lowerbound, upperbound):
     """
@@ -19,6 +28,19 @@ def generate_leadtime(t, dist, lowerbound, upperbound):
         raise Exception
     return leadtime
 
+# Function to create an empty dictionary with keys for each lead time
+def create_lead_time_dict(total_stockpoints_connections, max_lead_time):
+    lt_dict = {}
+    for lt in range(max_lead_time):
+        lt_dict[f'lt{lt}'] = [0] * (total_stockpoints_connections)
+    return lt_dict
+
+# Function to create an empty dictionary with keys for each lead time
+def create_lead_time_state(state_space, max_lead_time):
+    lt_dict = {}
+    for lt in range(max_lead_time):
+        lt_dict[f'lt{lt}'] = state_space
+    return lt_dict
 
 class InventoryEnv(gym.Env):
     """
@@ -50,15 +72,22 @@ class InventoryEnv(gym.Env):
         each period
         """
         self.feasible_actions = 0
-        self.action_space = spaces.Box(self.action_low, self.action_high, dtype=np.int32)
+        self.action_space = Box(self.action_low, self.action_high, dtype=np.int32)
 
     def determine_potential_states(self):
         """
         Based on the mean demand, we determine the maximum and minimum
         inventory to prevent the environment from reaching unlikely states
         """
-        # Observation space consists of the current timestep and inventory positions of every echelon
-        self.observation_space = spaces.Box(self.state_low, self.state_high, dtype=np.int32)
+        self.observation_space = Box(self.state_low, self.state_high, dtype=np.int32)
+
+        self.observation_space = Dict({
+            'total_inventory': Box(0, self.state.high, dtype=np.int32),
+            'total_backorders': Box(0, self.state.high, dtype=np.int32),
+            'inventory': Box(0, self.state.high, dtype=np.int32),
+            'backorders': Box(0, self.state.high, dtype=np.int32),
+            'in_transit': create_lead_time_state(Box(0, [self.state_in_transit] * self.case.no_nodes, dtype=np.int32), self.case.leadtime_ub)
+        })
 
     def _generate_demand(self):
         """
@@ -304,72 +333,22 @@ class InventoryEnv(gym.Env):
                 self.TotalDemand[j,i] += incomingOrders[j] + action[k]
         elif self.case.order_policy == 'BaseStock':
             bo_echelon = np.sum(self.BO[0], 0)
-            totalorderamount = action[k] - (self.INV[0, j] + self.in_transit[0, i, j] - bo_echelon[j])
-            number_of_upstream_connections = np.sum(self.case.connections[:, j])
-            self.O[t, j, i] += max(0, totalorderamount/number_of_upstream_connections)
-            if (self.t < self.case.horizon - 1) and (self.t >= self.case.warmup-1): 
-                self.TotalDemand[j,i] += max(0, totalorderamount/number_of_upstream_connections)
+            if action[k] > 0:
+                totalorderamount = max(0,action[k] - (self.INV[0, j] + self.in_transit[0, i, j] - bo_echelon[j]))
+                number_of_upstream_connections = np.sum(self.case.connections[:, j])
+                self.O[t, j, i] += max(0, totalorderamount)
+                # print(f"K:{k}, i:{i}, j:{j} toa:{totalorderamount}: action:{action[k]}, inv:{self.INV[0, j]} it:{self.in_transit[0, i, j]} bo:{bo_echelon[j]}")
+                # self.O[t, j, i] += max(0, totalorderamount/number_of_upstream_connections)
+                if (self.t < self.case.horizon - 1) and (self.t >= self.case.warmup-1): 
+                    self.TotalDemand[j,i] += max(0, totalorderamount)
+                    # self.TotalDemand[j,i] += max(0, totalorderamount/number_of_upstream_connections)
         else:
             raise NotImplementedError        
 
     def _code_state(self):
-        bo_echelon = np.sum(self.BO[0], 0)
-        if self.case_name == 'BeerGame':
-            if self.state_low[0] == 0:
-                totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
-                totalbackorders = np.sum(bo_echelon, 0)
-                previousDemand = np.sum(self.O[1], 0)
-                in_transit0 = np.sum(self.in_transit[0], 0)
-                in_transit1 = np.sum(self.in_transit[1], 0)
-                in_transit2 = np.sum(self.in_transit[2], 0)
-                in_transit3 = np.sum(self.in_transit[3], 0)
-                in_transit4 = np.sum(self.in_transit[4], 0)
-                transport1 = np.sum(self.T[1], 0)
-                transport2 = np.sum(self.T[2], 0)
-                transport3 = np.sum(self.T[3], 0)
-                transport4 = np.sum(self.T[4], 0)
-                CIP = np.zeros([self.case.no_stockpoints*12+2], dtype=int)
-                CIP[0] = totalinventory
-                CIP[1] = totalbackorders
-                for i in range(self.case.no_suppliers, self.case.no_stockpoints +
-                            self.case.no_suppliers):
-                    CIP[i+1] = self.INV[0, i]
-                    CIP[i+5] = bo_echelon[i]
-                    CIP[i+9] = previousDemand[i-1]
-                    CIP[i+13] = in_transit0[i]
-                    CIP[i+17] = in_transit1[i]
-                    CIP[i+21] = in_transit2[i]
-                    CIP[i+25] = in_transit3[i]
-                    CIP[i+29] = in_transit4[i]
-                    CIP[i+33] = transport1[i]
-                    CIP[i+37] = transport2[i]
-                    CIP[i+41] = transport3[i]
-                    CIP[i+45] = transport4[i]
-            else:
-                CIP = np.zeros([4], dtype=int)
-                for i in range(self.case.no_suppliers, self.case.no_stockpoints +
-                            self.case.no_suppliers):
-                    if self.INV[0,i] > 0:
-                        CIP[i-1] = self.INV[0,i]
-                    else:
-                        CIP[i-1] = -bo_echelon[i]
-            CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
-        elif self.case_name == 'Divergent':
-            totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
-            totalbackorders = np.sum(bo_echelon, 0)
-            in_transit0 = np.sum(self.in_transit[0], 0)
-            CIP = np.zeros([self.case.no_stockpoints*3+1], dtype=int)
-            CIP[0] = totalinventory
-            CIP[1] = totalbackorders
-            for i in range(self.case.no_suppliers, self.case.no_stockpoints +
-                            self.case.no_suppliers):
-                CIP[i+1] = self.INV[0, i]
-                if i > self.case.no_suppliers:
-                    CIP[i+4] = bo_echelon[i]
-                CIP[i+8] = in_transit0[i]
-            CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
-        elif self.case_name == 'General':
 
+        # Cap is nu nog niet heel netjes verwerkt en alleen voor general case.
+        if self.case_name == 'General':
             # print(f"inventory:{self.INV[0, self.case.no_suppliers:-self.case.no_customers]}")
             self.INV[0, self.case.no_suppliers:-self.case.no_customers] = np.minimum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], self.case.state_high[2:11])
             # print(f"inventory capped:{self.INV[0, :]}")
@@ -377,37 +356,109 @@ class InventoryEnv(gym.Env):
             self.BO[0, :] =  np.minimum(self.BO[0, :], [0,0,0,0,500,500,500,500,250,250,250,250,250,0,0,0,0,0] )
             # print("bo capped:{}".format(self.BO[0, :]))
 
+        bo_echelon = np.sum(self.BO[0], 0)
+        totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
+        totalbackorders = np.sum(bo_echelon, 0)
 
-            totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
-            totalbackorders = np.sum(bo_echelon, 0)
-            previousDemand = np.sum(self.O[1], 1)
-            in_transit0 = np.sum(self.in_transit[0], 0)
-            CIP = np.zeros([2+self.case.no_stockpoints+19+18], dtype=int) # [0-56]
-            CIP[0] = totalinventory
-            CIP[1] = totalbackorders
-            for i in range(self.case.no_suppliers, self.case.no_stockpoints +
-                        self.case.no_suppliers):
-                # print(i)
-                # print(self.INV[0, i])
-                CIP[i - self.case.no_suppliers + 2] = self.INV[0, i]        # [2, 10]
-            # loop hier over nonzeros van connectie
-            k = 11
-            i_list, j_list = np.nonzero(self.case.connections)
-            for i, j in zip(i_list[self.case.no_suppliers:], j_list[self.case.no_suppliers:]):
-                CIP[k] = self.BO[0, j, i]
-                k += 1
+        i_list, j_list = np.nonzero(self.case.connections)
+
+        # Create a named state space dictionary
+        named_state_space = {
+            'total_inventory': totalinventory,
+            'total_backorders': totalbackorders,
+            'inventory': [0] * (self.case.no_stockpoints),
+            'backorders': [0] * (len(i_list[self.case.no_suppliers:])),
+            'in_transit': create_lead_time_dict(len(i_list[:-self.case.no_customers]), self.case.leadtime_ub)
+        }
+
+        # Fill in inventory values
+        for i in range(self.case.no_suppliers, self.case.no_stockpoints + self.case.no_suppliers):
+            named_state_space['inventory'][i - self.case.no_suppliers] = self.INV[0, i]
+
+        # Fill in backorders values
+        k = 0
+        for i, j in zip(i_list[self.case.no_suppliers:], j_list[self.case.no_suppliers:]):
+            named_state_space['backorders'][k] = self.BO[0, j, i]
+            k += 1
+
+        # Fill in in_transit values
+        k = 0
+        for time in range(self.case.leadtime_ub):
             for i, j in zip(i_list[:-self.case.no_customers], j_list[:-self.case.no_customers]):
-                CIP[k] = self.in_transit[0, i, j]  
+                named_state_space['in_transit'][f'lt{time}'][k] = self.T[time, i, j]
                 k += 1
-            CIP_old = CIP
-            CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
-            if np.array_equiv(CIP_old,CIP) == False:
-                print("Hier gaat nog iets mis")
-                print(CIP_old)
-                print(CIP)
-        else: 
-            raise NotImplementedError
-        return CIP
+
+        named_state_array= named_state_space_to_input(named_state_space)
+
+            #old
+        # # This still needs to be adjusted. To implement it in the named statespace, we should allow make the named statespace more flexible to accomodate for lead times.
+        # if self.case_name == 'BeerGame':
+        #     in_transit0 = np.sum(self.in_transit[0], 0)
+        #     in_transit1 = np.sum(self.in_transit[1], 0)
+        #     in_transit2 = np.sum(self.in_transit[2], 0)
+        #     in_transit3 = np.sum(self.in_transit[3], 0)
+        #     in_transit4 = np.sum(self.in_transit[4], 0)
+        #     transport1 = np.sum(self.T[1], 0)
+        #     transport2 = np.sum(self.T[2], 0)
+        #     transport3 = np.sum(self.T[3], 0)
+        #     transport4 = np.sum(self.T[4], 0)
+        #     for i in range(self.case.no_suppliers, self.case.no_stockpoints +
+        #                 self.case.no_suppliers):
+        #         CIP[i+13] = in_transit0[i]
+        #         CIP[i+17] = in_transit1[i]
+        #         CIP[i+21] = in_transit2[i]
+        #         CIP[i+25] = in_transit3[i]
+        #         CIP[i+29] = in_transit4[i]
+        #         CIP[i+33] = transport1[i]
+        #         CIP[i+37] = transport2[i]
+        #         CIP[i+41] = transport3[i]
+        #         CIP[i+45] = transport4[i]
+
+            # elif self.case_name == 'Divergent':
+            #     totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
+            #     totalbackorders = np.sum(bo_echelon, 0)
+            #     in_transit0 = np.sum(self.in_transit[0], 0)
+            #     CIP = np.zeros([self.case.no_stockpoints*3+1], dtype=int)
+            #     CIP[0] = totalinventory
+            #     CIP[1] = totalbackorders
+            #     for i in range(self.case.no_suppliers, self.case.no_stockpoints +
+            #                     self.case.no_suppliers):
+            #         CIP[i+1] = self.INV[0, i]
+            #         if i > self.case.no_suppliers:
+            #             CIP[i+4] = bo_echelon[i]
+            #         CIP[i+8] = in_transit0[i]
+            #     CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
+
+
+            # totalinventory = np.sum(self.INV[0, self.case.no_suppliers:-self.case.no_customers], 0)
+            # totalbackorders = np.sum(bo_echelon, 0)
+            # previousDemand = np.sum(self.O[1], 1)
+            # in_transit0 = np.sum(self.in_transit[0], 0)
+            # CIP = np.zeros([2+self.case.no_stockpoints+19+18], dtype=int) # [0-56]
+            # CIP[0] = totalinventory
+            # CIP[1] = totalbackorders
+            # for i in range(self.case.no_suppliers, self.case.no_stockpoints +
+            #             self.case.no_suppliers):
+            #     # print(i)
+            #     # print(self.INV[0, i])
+            #     CIP[i - self.case.no_suppliers + 2] = self.INV[0, i]        # [2, 10]
+            # # loop hier over nonzeros van connectie
+            # k = 11
+            # i_list, j_list = np.nonzero(self.case.connections)
+            # for i, j in zip(i_list[self.case.no_suppliers:], j_list[self.case.no_suppliers:]):
+            #     CIP[k] = self.BO[0, j, i]
+            #     k += 1
+            # for i, j in zip(i_list[:-self.case.no_customers], j_list[:-self.case.no_customers]):
+            #     CIP[k] = self.in_transit[0, i, j]  
+            #     k += 1
+            # CIP_old = CIP
+            # CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
+            # if np.array_equiv(CIP_old,CIP) == False:
+                # print("Hier gaat nog iets mis")
+                # print(CIP_old)
+                # print(CIP)
+        # CIP = np.clip(CIP, self.observation_space.low, self.observation_space.high)
+        return named_state_array
     
     def _check_action_space(self, action):
         if isinstance(self.action_space, spaces.Box):
@@ -526,7 +577,7 @@ class InventoryEnv(gym.Env):
         self.O = np.copy(self.BO)
         # Number of items arriving in time t from stockpoint s to stockpoint s+1
         self.T = np.copy(self.BO)
-        # Number of items in transit from stockpoint s to stockpoint s
+        # Number of items in transit from stockpoint s to stockpoint s+1
         self.in_transit = np.copy(self.BO)
         # Total demand from stockpoint s to stockpoint s+1
         self.TotalDemand = np.zeros([self.case.no_nodes, self.case.no_nodes], dtype=int)
@@ -557,15 +608,6 @@ class InventoryEnv(gym.Env):
             self.T[2, 0, 1] = 4
         self.state = self._code_state()
         return self.state
-
-    def custom_settings(self, table_name, time, source, destination, value):
-        """
-        Add custom settings to the simulation.
-
-        Can be used to add initial shipments and demand.
-        """
-        table = eval(table_name)
-        table[time, source, destination] = value
 
     def _visualize(self, action):
         # Initialize graph

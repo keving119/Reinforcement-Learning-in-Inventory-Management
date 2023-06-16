@@ -5,7 +5,7 @@ from ppo.ppo_support_functions import set_seeds
 from cases import General
 import ppo_settings
 
-experiment_name = 'CBC/CAPtestecht/'
+experiment_name = 'CBC/NewState123456789/'
 case = General()
 
 # length of simulation to compute benchmark and as stopping criterion
