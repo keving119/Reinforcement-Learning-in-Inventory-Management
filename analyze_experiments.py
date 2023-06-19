@@ -56,7 +56,7 @@ elif CASE == "CBC":
     basestock_action = (case.action_high - case.action_low) * ((basestock - case.action_min) / (case.action_max - case.action_min)) + case.action_low
     begin_sim = 50
     end_sim = 100
-    directory = 'results/DRL/CBC/Experiment3/'
+    directory = 'result_files/CBC/CAPtestechtv2/'
 
 env = InventoryEnv(case, case.action_low, case.action_high, case.action_min, case.action_max,
                    case.state_low, case.state_high)
@@ -67,8 +67,8 @@ cooldown_buffer = False
 def save_states_encountered(env, rn, size, model):
     ac = MLPActorCritic(env.observation_space, env.action_space, env.feasible_actions, (64, 64), nn.Tanh, 0.0,
                         'uniform')
-    model = torch.load(directory + model)
-    ac.load_state_dict(model)
+    saved_state = torch.load(directory + model)
+    ac.load_state_dict(saved_state['structure'])
     set_seeds(env, rn)
     print(rn)
     # instantiate buffer and logger, tensorboard writer
@@ -116,8 +116,9 @@ def save_states_encountered(env, rn, size, model):
 def get_ppo_policy_results(env, rn, size, df, model):
     ac = MLPActorCritic(env.observation_space, env.action_space, env.feasible_actions, (64, 64), nn.Tanh, 0.0,
                         'uniform')
-    model = torch.load(directory + model)
-    ac.load_state_dict(model)
+    saved_state = torch.load(directory + model)
+    print(saved_state.keys())
+    ac.load_state_dict(saved_state['structure'])
     set_seeds(env, rn)
     print(rn)
     # instantiate buffer and logger, tensorboard writer
@@ -147,7 +148,7 @@ def get_ppo_policy_results(env, rn, size, df, model):
             holdinglist.append(info_dict['holding_costs'])
             bolist.append(info_dict['backorder_costs'])
             rewardlist.append(r)
-            df = df.append({'RN': rn,
+            df = df._append({'RN': rn,
                             'PPO_Inventory': info_dict['holding_costs'],
                             'PPO_Backorders': info_dict['backorder_costs'],
                             'PPO_Costs': r}, ignore_index=True)
@@ -308,7 +309,7 @@ def get_benchmark_results(env, rn, length, df, action):
             inventorylist.append(info['holding_costs'])
             backorderlist.append(info['backorder_costs'])
             rewardlist.append(reward)
-            df = df.append({'RN': rn,
+            df = df._append({'RN': rn,
                             'Benchmark_Inventory': info['holding_costs'],
                             'Benchmark_Backorders': info['backorder_costs'],
                             'Benchmark_Costs': reward}, ignore_index=True)
@@ -469,8 +470,8 @@ env2 = InventoryEnv(case2, case.action_low, case.action_high, case.action_min, c
 
 benchmark_df, benchmark_inventory, benchmark_backorders, benchmark_reward = get_benchmark_results(env2, 1, 200,benchmark_df,basestock_action)
 ppo_df, ppo_inventory, ppo_backorders, ppo_reward = get_ppo_policy_results(env, 1, 200, ppo_df,
-                                                                               'model49999.pt')
-# save_states_encountered(env,0, 2000, 'model49999.pt')
+                                                                               'RN1/pyt_network_save/modelsave0.pt')
+save_states_encountered(env,0, 2000, 'RN1/pyt_network_save/modelsave0.pt')
 df = ppo_df.combine_first(benchmark_df)
 #     # plot_costs_over_time(benchmark_inventory, benchmark_backorders,
 #     #                 np.sum(benchmark_reward), '{} - Benchmark policy over time'.format(rn), 50, 100)
