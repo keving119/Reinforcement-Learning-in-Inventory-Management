@@ -125,7 +125,7 @@ class Logger():
         fname = name + ('%d'%itr if itr is not None else '') + '.pt'
         fname = os.path.join(fpath, fname)
         os.makedirs(fpath, exist_ok = True)
-        torch.save({'structure': model,
+        torch.save({'structure': model.state_dict(),
                     'env': env,
                     'pi_optimizer': pi_optimizer.state_dict(),
                     'vf_optimizer': vf_optimizer.state_dict()}, fname)
